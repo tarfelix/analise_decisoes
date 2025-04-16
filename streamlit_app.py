@@ -255,7 +255,7 @@ with st.sidebar:
 st.header("Contexto do Processo")
 col_contexto1, col_contexto2, col_contexto3 = st.columns(3)
 with col_contexto1:
-    data_ciencia = st.date_input("Data da Ciência/Publicação:", value=None, key="data_ciencia", help="Data da notificação formal da decisão.", max_value=date.today())
+    data_ciencia = st.date_input("Data da Ciência/Publicação:", value=None, key="data_ciencia", help="Data da notificação formal da decisão.")
     st.session_state.data_ciencia_valida = data_ciencia is not None
 with col_contexto2:
     cliente_options = ["Reclamante", "Reclamado", "Outro (Terceiro, MPT, etc.)"]
