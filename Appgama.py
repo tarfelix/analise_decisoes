@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-# Assistente Jurídico DataJuri v3.4
+# Assistente Jurídico DataJuri v3.5
 # App unificado com consulta, análise, cálculo avançado de custas/depósitos e gestão de prazos.
-# Correção: Corrigido o SyntaxError no f-string do corpo do e-mail.
+# Alteração: Migração do .env para o sistema de Secrets do Streamlit.
 
 import streamlit as st
 import pandas as pd
@@ -10,7 +10,6 @@ import base64
 import json
 import os
 import logging
-from dotenv import load_dotenv
 from datetime import datetime, date, timedelta
 import holidays
 import re
@@ -77,10 +76,17 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def get_new_token():
     st.info("➡️ Solicitando um novo token de acesso à API...")
     logging.info("Requesting new access token.")
-    client_id, client_secret, user_email, user_password, api_base_url = (os.getenv(k) for k in ["DATAJURI_CLIENT_ID", "DATAJURI_SECRET_ID", "DATAJURI_USERNAME", "DATAJURI_PASSWORD", "DATAJURI_BASE_URL"])
-    if not all([client_id, client_secret, user_email, user_password, api_base_url]):
-        st.error("⚠️ ATENÇÃO: Verifique se o arquivo '.env' está completo com as credenciais da API.")
+    try:
+        # Alterado de os.getenv para st.secrets
+        client_id = st.secrets["DATAJURI_CLIENT_ID"]
+        client_secret = st.secrets["DATAJURI_SECRET_ID"]
+        user_email = st.secrets["DATAJURI_USERNAME"]
+        user_password = st.secrets["DATAJURI_PASSWORD"]
+        api_base_url = st.secrets["DATAJURI_BASE_URL"]
+    except KeyError as e:
+        st.error(f"⚠️ ATENÇÃO: A credencial '{e.args[0]}' não foi encontrada. Configure os 'Secrets' no Streamlit Cloud.")
         return None
+
     try:
         auth_string = f"{client_id}:{client_secret}"
         auth_base64 = base64.b64encode(auth_string.encode('utf-8')).decode('utf-8')
@@ -95,6 +101,7 @@ def get_new_token():
             st.error("❌ Erro: 'access_token' não encontrado na resposta da API.")
             return None
         token_info = {'access_token': access_token, 'timestamp': datetime.now().isoformat()}
+        # Salvar o token localmente ainda é útil para evitar re-autenticação a cada execução
         with open(TOKEN_FILE, 'w') as f:
             json.dump(token_info, f)
         st.success("✅ Novo token obtido e salvo com sucesso!")
@@ -211,7 +218,6 @@ def generate_final_text(sections):
 # INICIALIZAÇÃO DO APP E ESTADO DA SESSÃO
 # ==============================================================================
 
-load_dotenv()
 if "page" not in st.session_state: st.session_state.page = "consulta"
 if "access_token" not in st.session_state: st.session_state.access_token = None
 if "processo_data" not in st.session_state: st.session_state.processo_data = None
@@ -221,7 +227,9 @@ if "prazos" not in st.session_state: st.session_state.prazos = []
 if "report_generated" not in st.session_state: st.session_state.report_generated = False
 
 st.session_state.access_token = get_valid_token()
-api_base_url = os.getenv("DATAJURI_BASE_URL")
+# A variável api_base_url será lida dos secrets dentro da função get_new_token
+api_base_url = st.secrets.get("DATAJURI_BASE_URL", "") if 'DATAJURI_BASE_URL' in st.secrets else ""
+
 if st.session_state.access_token:
     api_headers = {'Authorization': f'Bearer {st.session_state.access_token}'}
 else:
@@ -580,7 +588,6 @@ def render_analise_page():
             elif obs_sentenca:
                  recomendacao_final = obs_sentenca
             
-            # CORREÇÃO: Garante que o f-string seja fechado corretamente.
             email_body = f"""Prezados, bom dia!
 
 Local: {local_processo}
