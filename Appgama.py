@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-# Assistente Jurídico DataJuri v3.3
+# Assistente Jurídico DataJuri v3.4
 # App unificado com consulta, análise, cálculo avançado de custas/depósitos e gestão de prazos.
-# Novidade: Salva o arquivo JSON de atualização diretamente em uma pasta no servidor.
+# Correção: Corrigido o SyntaxError no f-string do corpo do e-mail.
 
 import streamlit as st
 import pandas as pd
@@ -580,6 +580,7 @@ def render_analise_page():
             elif obs_sentenca:
                  recomendacao_final = obs_sentenca
             
+            # CORREÇÃO: Garante que o f-string seja fechado corretamente.
             email_body = f"""Prezados, bom dia!
 
 Local: {local_processo}
@@ -587,4 +588,35 @@ Processo nº. {st.session_state.processo_data.get('pasta', 'N/A')}
 Cliente: {st.session_state.processo_data.get('cliente.nome', 'N/A')}
 Adverso: {st.session_state.processo_data.get('adverso.nome', 'N/A')}
 
-Pelo presente, informamos que a {tipo_decisao.lower() if tipo_decisao else 'decisão'} referente ao processo acima 
+Pelo presente, informamos que a {tipo_decisao.lower() if tipo_decisao else 'decisão'} referente ao processo acima foi publicada.
+
+Segue abaixo um resumo dos pedidos, com informações atualizadas sobre cada um deles:
+
+{resumo_pedidos_email.strip()}
+
+{recomendacao_final}
+{info_custas}
+
+Diante do exposto, para que possamos elaborar o recurso, solicitamos retorno quanto ao interesse em 48 horas.
+Qualquer esclarecimento, favor entrar em contato com o escritório.
+
+Atenciosamente,
+
+{advogado_responsavel}
+"""
+            st.text_input("Assunto do Email:", value=email_subject)
+            st.text_area("Corpo do Email:", value=email_body, height=400)
+            st.success("Rascunho do email gerado com sucesso!")
+
+# ==============================================================================
+# ROTEADOR PRINCIPAL DO APP
+# ==============================================================================
+if st.session_state.page == "consulta":
+    render_consulta_page()
+elif st.session_state.page == "analise":
+    if st.session_state.processo_data:
+        render_analise_page()
+    else:
+        st.warning("Nenhum processo carregado. Redirecionando para a página de consulta.")
+        st.session_state.page = "consulta"
+        st.rerun()
