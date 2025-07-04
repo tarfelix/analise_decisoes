@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Assistente Jurídico DataJuri v3.7
 # App unificado com consulta, análise, cálculo avançado de custas/depósitos e gestão de prazos.
-# Correção: Atualizados os valores de teto do depósito recursal conforme Ato SEGJUD.GP Nº 366/2024.
+# Correção: Ajustada a definição dos tetos de depósito recursal para cálculo dinâmico.
 
 import streamlit as st
 import pandas as pd
@@ -31,15 +31,21 @@ LOG_FILE = 'assistente.log'
 UPDATE_FOLDER = 'atualizacoes_robo' # Pasta para salvar os arquivos JSON
 TOKEN_EXPIRATION_MINUTES = 50
 
-# ATENÇÃO: Valores atualizados conforme Ato SEGJUD.GP N.º 366/2024, vigentes a partir de 01/08/2024.
+# ATENÇÃO: Atualize estes valores base conforme as portarias do CSJT.
+# Valores vigentes a partir de 01/08/2024 (Ato SEJUD.GP Nº 477/2024)
+TETO_RECURSO_ORDINARIO = 12969.43
+TETO_RECURSO_REVISTA = 25938.87
+
+# O dicionário agora calcula os valores dos agravos dinamicamente.
 TETOS_DEPOSITO_RECURSAL = {
-    "Recurso Ordinário (RO)": 13133.46,
-    "Recurso de Revista (RR)": 26266.92,
-    "Recurso de Embargos (E-RR/E-ED)": 26266.92,
-    "Agravo de Instrumento em Recurso Ordinário (AIRO)": 6566.73, # Metade do teto do RO
-    "Agravo de Instrumento em Recurso de Revista (AIRR)": 13133.46, # Metade do teto do RR
-    "Outro": 26266.92 # Usa o teto máximo como padrão
+    "Recurso Ordinário (RO)": TETO_RECURSO_ORDINARIO,
+    "Recurso de Revista (RR)": TETO_RECURSO_REVISTA,
+    "Recurso de Embargos (E-RR/E-ED)": TETO_RECURSO_REVISTA,
+    "Agravo de Instrumento em Recurso Ordinário (AIRO)": TETO_RECURSO_ORDINARIO / 2,
+    "Agravo de Instrumento em Recurso de Revista (AIRR)": TETO_RECURSO_REVISTA / 2,
+    "Outro": TETO_RECURSO_REVISTA # Usa o teto máximo como padrão
 }
+
 
 CLIENTE_OPTIONS = ["Reclamante", "Reclamado", "Outro (Terceiro, MPT, etc.)"]
 DECISAO_OPTIONS = [
