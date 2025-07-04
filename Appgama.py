@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-# Assistente Jurídico DataJuri v3.6
+# Assistente Jurídico DataJuri v3.7
 # App unificado com consulta, análise, cálculo avançado de custas/depósitos e gestão de prazos.
-# Correção: Ajustado o cálculo de custas (nunca pela metade) e a lógica de redução do depósito recursal.
+# Correção: Atualizados os valores de teto do depósito recursal conforme Ato SEGJUD.GP Nº 366/2024.
 
 import streamlit as st
 import pandas as pd
@@ -31,15 +31,14 @@ LOG_FILE = 'assistente.log'
 UPDATE_FOLDER = 'atualizacoes_robo' # Pasta para salvar os arquivos JSON
 TOKEN_EXPIRATION_MINUTES = 50
 
-# ATENÇÃO: Atualize estes valores conforme as portarias do CSJT.
-# Valores vigentes a partir de 01/08/2024 (Ato SEJUD.GP Nº 477/2024)
+# ATENÇÃO: Valores atualizados conforme Ato SEGJUD.GP N.º 366/2024, vigentes a partir de 01/08/2024.
 TETOS_DEPOSITO_RECURSAL = {
-    "Recurso Ordinário (RO)": 12969.43,
-    "Recurso de Revista (RR)": 25938.87,
-    "Recurso de Embargos (E-RR/E-ED)": 25938.87,
-    "Agravo de Instrumento em Recurso Ordinário (AIRO)": 6484.72, # Metade do teto do RO
-    "Agravo de Instrumento em Recurso de Revista (AIRR)": 12969.44, # Metade do teto do RR
-    "Outro": 25938.87 # Usa o teto máximo como padrão
+    "Recurso Ordinário (RO)": 13133.46,
+    "Recurso de Revista (RR)": 26266.92,
+    "Recurso de Embargos (E-RR/E-ED)": 26266.92,
+    "Agravo de Instrumento em Recurso Ordinário (AIRO)": 6566.73, # Metade do teto do RO
+    "Agravo de Instrumento em Recurso de Revista (AIRR)": 13133.46, # Metade do teto do RR
+    "Outro": 26266.92 # Usa o teto máximo como padrão
 }
 
 CLIENTE_OPTIONS = ["Reclamante", "Reclamado", "Outro (Terceiro, MPT, etc.)"]
