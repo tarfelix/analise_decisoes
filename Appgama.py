@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-# Assistente Jurídico DataJuri v4.0
+# Assistente Jurídico DataJuri v4.1
 # App unificado com consulta, análise, cálculo avançado de custas/depósitos e gestão de prazos.
-# Novidade: Unificação da interface em uma única tela para um fluxo de trabalho mais rápido e intuitivo.
+# Correção: Ajustada a data de validade dos tetos recursais e o campo padrão de cliente.
 
 import streamlit as st
 import pandas as pd
@@ -31,7 +31,7 @@ UPDATE_FOLDER = 'atualizacoes_robo' # Pasta para salvar os arquivos JSON
 TOKEN_EXPIRATION_MINUTES = 50
 
 # DATA DE VALIDADE DOS VALORES ABAIXO
-VALIDADE_VALORES_TETO = date(2024, 7, 31)
+VALIDADE_VALORES_TETO = date(2025, 7, 31) # CORRIGIDO
 
 # ATENÇÃO: Valores base conforme Ato SEGJUD.GP Nº 366/2024, vigentes a partir de 01/08/2024.
 TETO_RECURSO_ORDINARIO = 13133.46
@@ -299,8 +299,10 @@ if st.session_state.get("processo_data"):
     col4.metric("Status", st.session_state.processo_data.get('status', 'N/A'))
     
     st.header("1. Contexto e Análise da Decisão")
+    # CORREÇÃO: Lógica para definir "Reclamado" como padrão.
     posicao_cliente_api = st.session_state.processo_data.get('posicaoCliente', '').lower()
-    cliente_index = 1 if 'reclamado' in posicao_cliente_api else 0
+    cliente_index = 0 if 'reclamante' in posicao_cliente_api else 1
+    
     col_contexto1, col_contexto2, col_contexto3 = st.columns(3)
     with col_contexto1: data_ciencia = st.date_input("Data da Ciência/Publicação:", value=None, key="data_ciencia")
     with col_contexto2: cliente_role = st.selectbox("Cliente é:", options=CLIENTE_OPTIONS, index=cliente_index, key="cliente_role")
