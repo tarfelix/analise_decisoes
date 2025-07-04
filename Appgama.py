@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-# Assistente Jurídico DataJuri v3.7
+# Assistente Jurídico DataJuri v4.0
 # App unificado com consulta, análise, cálculo avançado de custas/depósitos e gestão de prazos.
-# Correção: Ajustada a definição dos tetos de depósito recursal para cálculo dinâmico.
+# Novidade: Unificação da interface em uma única tela para um fluxo de trabalho mais rápido e intuitivo.
 
 import streamlit as st
 import pandas as pd
@@ -10,7 +10,6 @@ import base64
 import json
 import os
 import logging
-from dotenv import load_dotenv
 from datetime import datetime, date, timedelta
 import holidays
 import re
@@ -31,10 +30,12 @@ LOG_FILE = 'assistente.log'
 UPDATE_FOLDER = 'atualizacoes_robo' # Pasta para salvar os arquivos JSON
 TOKEN_EXPIRATION_MINUTES = 50
 
-# ATENÇÃO: Atualize estes valores base conforme as portarias do CSJT.
-# Valores vigentes a partir de 01/08/2024 (Ato SEJUD.GP Nº 477/2024)
-TETO_RECURSO_ORDINARIO = 12969.43
-TETO_RECURSO_REVISTA = 25938.87
+# DATA DE VALIDADE DOS VALORES ABAIXO
+VALIDADE_VALORES_TETO = date(2024, 7, 31)
+
+# ATENÇÃO: Valores base conforme Ato SEGJUD.GP Nº 366/2024, vigentes a partir de 01/08/2024.
+TETO_RECURSO_ORDINARIO = 13133.46
+TETO_RECURSO_REVISTA = 26266.92
 
 # O dicionário agora calcula os valores dos agravos dinamicamente.
 TETOS_DEPOSITO_RECURSAL = {
@@ -73,6 +74,17 @@ MAPA_DECISAO_RECURSO = {
 }
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', filename=LOG_FILE, filemode='a')
+
+# ==============================================================================
+# VERIFICAÇÃO DE VALIDADE E INICIALIZAÇÃO
+# ==============================================================================
+
+# Exibe um aviso se a data de validade dos valores de teto já passou.
+if datetime.now().date() > VALIDADE_VALORES_TETO:
+    st.error(
+        "**ALERTA DE ATUALIZAÇÃO:** Os valores de teto para depósito recursal podem estar desatualizados. "
+        "Por favor, contate **Tarcisio Picon** para atualizar o sistema com a nova portaria do TST."
+    )
 
 # ==============================================================================
 # FUNÇÕES AUXILIARES E DE API
@@ -222,7 +234,6 @@ def generate_final_text(sections):
 # INICIALIZAÇÃO DO APP E ESTADO DA SESSÃO
 # ==============================================================================
 
-if "page" not in st.session_state: st.session_state.page = "consulta"
 if "access_token" not in st.session_state: st.session_state.access_token = None
 if "processo_data" not in st.session_state: st.session_state.processo_data = None
 if "pedidos_df" not in st.session_state: st.session_state.pedidos_df = None
@@ -240,20 +251,21 @@ else:
     st.stop()
 
 # ==============================================================================
-# PÁGINA 1: CONSULTA DE PROCESSO
+# LAYOUT PRINCIPAL DO APP (TELA ÚNICA)
 # ==============================================================================
-def render_consulta_page():
-    st.title("🔎 Assistente Jurídico - Consulta")
-    st.markdown("Busque pelo número da pasta do processo para carregar os dados e iniciar a análise.")
+
+st.title("🔎 Assistente Jurídico - Análise de Decisões")
+st.markdown("Busque pelo número da pasta do processo para carregar os dados e iniciar a análise.")
+
+numero_processo = st.text_input("Número da Pasta do Processo:", key="numero_processo_input")
+
+if st.button("Buscar Processo", type="primary"):
     st.session_state.report_generated = False
-
-    numero_processo = st.text_input("Número da Pasta do Processo:", key="numero_processo_input")
-
-    if st.button("Buscar Processo", type="primary"):
-        if not numero_processo:
-            st.warning("Por favor, insira o número da pasta do processo.")
-            return
-        
+    st.session_state.prazos = []
+    if not numero_processo:
+        st.warning("Por favor, insira o número da pasta do processo.")
+        st.session_state.processo_data = None # Limpa dados antigos
+    else:
         processo_fields = ["pasta", "cliente.nome", "adverso.nome", "posicaoCliente", "assunto", "status", "faseAtual.vara", "faseAtual.forum"]
         processo_raw_data = get_entity_data(api_base_url, api_headers, "Processo", processo_fields, [f"pasta | igual a | {numero_processo}"])
         if processo_raw_data and processo_raw_data.get('rows'):
@@ -262,49 +274,30 @@ def render_consulta_page():
         else:
             st.error("Nenhum processo encontrado com este número.")
             st.session_state.processo_data = None
-            return
         
-        pedidos_fields = ["id", "nomeObjeto", "situacao", "resultado_1_instanci", "resultado_2_instanci", "resultado_instancia_"]
-        pedidos_raw_data = get_entity_data(api_base_url, api_headers, "PedidoProcesso", pedidos_fields, [f"processo.pasta | igual a | {numero_processo}"])
-        if pedidos_raw_data and pedidos_raw_data.get('rows'):
-            df = pd.DataFrame(pedidos_raw_data['rows'])
-            st.session_state.pedidos_df = df
-            st.session_state.edited_pedidos_df = df.copy()
-            st.info(f"Encontrados **{len(df)}** pedidos/objetos para este processo.")
-        else:
-            st.warning("Nenhum pedido/objeto encontrado para este processo.")
-            st.session_state.pedidos_df = pd.DataFrame()
-            st.session_state.edited_pedidos_df = pd.DataFrame()
+        if st.session_state.processo_data:
+            pedidos_fields = ["id", "nomeObjeto", "situacao", "resultado_1_instanci", "resultado_2_instanci", "resultado_instancia_"]
+            pedidos_raw_data = get_entity_data(api_base_url, api_headers, "PedidoProcesso", pedidos_fields, [f"processo.pasta | igual a | {numero_processo}"])
+            if pedidos_raw_data and pedidos_raw_data.get('rows'):
+                df = pd.DataFrame(pedidos_raw_data['rows'])
+                st.session_state.pedidos_df = df
+                st.session_state.edited_pedidos_df = df.copy()
+                st.info(f"Encontrados **{len(df)}** pedidos/objetos para este processo.")
+            else:
+                st.warning("Nenhum pedido/objeto encontrado para este processo.")
+                st.session_state.pedidos_df = pd.DataFrame()
+                st.session_state.edited_pedidos_df = pd.DataFrame()
 
-    if st.session_state.processo_data:
-        st.divider()
-        st.subheader("Dados do Processo Carregado")
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Pasta", st.session_state.processo_data.get('pasta', 'N/A'))
-        col2.metric("Cliente", st.session_state.processo_data.get('cliente.nome', 'N/A'))
-        col3.metric("Adverso", st.session_state.processo_data.get('adverso.nome', 'N/A'))
-        col4.metric("Status", st.session_state.processo_data.get('status', 'N/A'))
-        
-        if st.session_state.pedidos_df is not None:
-            st.subheader("Pedidos/Objetos do Processo")
-            st.dataframe(st.session_state.pedidos_df, use_container_width=True)
-        
-        if st.button("✍️ Analisar Decisão deste Processo", use_container_width=True):
-            st.session_state.page = "analise"
-            st.rerun()
-
-# ==============================================================================
-# PÁGINA 2: ANÁLISE DE DECISÃO
-# ==============================================================================
-def render_analise_page():
-    st.title("✍️ Formulário de Análise de Decisão")
-    if st.button("⬅️ Voltar para a busca"):
-        st.session_state.page = "consulta"
-        st.rerun()
-
-    st.info(f"Analisando o processo **{st.session_state.processo_data.get('pasta', '')}**.")
+# --- Renderiza o formulário de análise se um processo foi carregado ---
+if st.session_state.get("processo_data"):
     st.divider()
-
+    st.subheader("Dados do Processo Carregado")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Pasta", st.session_state.processo_data.get('pasta', 'N/A'))
+    col2.metric("Cliente", st.session_state.processo_data.get('cliente.nome', 'N/A'))
+    col3.metric("Adverso", st.session_state.processo_data.get('adverso.nome', 'N/A'))
+    col4.metric("Status", st.session_state.processo_data.get('status', 'N/A'))
+    
     st.header("1. Contexto e Análise da Decisão")
     posicao_cliente_api = st.session_state.processo_data.get('posicaoCliente', '').lower()
     cliente_index = 1 if 'reclamado' in posicao_cliente_api else 0
@@ -609,16 +602,3 @@ Atenciosamente,
             st.text_input("Assunto do Email:", value=email_subject)
             st.text_area("Corpo do Email:", value=email_body, height=400)
             st.success("Rascunho do email gerado com sucesso!")
-
-# ==============================================================================
-# ROTEADOR PRINCIPAL DO APP
-# ==============================================================================
-if st.session_state.page == "consulta":
-    render_consulta_page()
-elif st.session_state.page == "analise":
-    if st.session_state.processo_data:
-        render_analise_page()
-    else:
-        st.warning("Nenhum processo carregado. Redirecionando para a página de consulta.")
-        st.session_state.page = "consulta"
-        st.rerun()
