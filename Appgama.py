@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-# Assistente Jurídico DataJuri v3.5
+# Assistente Jurídico DataJuri v3.6
 # App unificado com consulta, análise, cálculo avançado de custas/depósitos e gestão de prazos.
-# Alteração: Migração do .env para o sistema de Secrets do Streamlit.
+# Correção: Ajustado o cálculo de custas (nunca pela metade) e a lógica de redução do depósito recursal.
 
 import streamlit as st
 import pandas as pd
@@ -10,6 +10,7 @@ import base64
 import json
 import os
 import logging
+from dotenv import load_dotenv
 from datetime import datetime, date, timedelta
 import holidays
 import re
@@ -77,7 +78,6 @@ def get_new_token():
     st.info("➡️ Solicitando um novo token de acesso à API...")
     logging.info("Requesting new access token.")
     try:
-        # Alterado de os.getenv para st.secrets
         client_id = st.secrets["DATAJURI_CLIENT_ID"]
         client_secret = st.secrets["DATAJURI_SECRET_ID"]
         user_email = st.secrets["DATAJURI_USERNAME"]
@@ -101,7 +101,6 @@ def get_new_token():
             st.error("❌ Erro: 'access_token' não encontrado na resposta da API.")
             return None
         token_info = {'access_token': access_token, 'timestamp': datetime.now().isoformat()}
-        # Salvar o token localmente ainda é útil para evitar re-autenticação a cada execução
         with open(TOKEN_FILE, 'w') as f:
             json.dump(token_info, f)
         st.success("✅ Novo token obtido e salvo com sucesso!")
@@ -227,7 +226,6 @@ if "prazos" not in st.session_state: st.session_state.prazos = []
 if "report_generated" not in st.session_state: st.session_state.report_generated = False
 
 st.session_state.access_token = get_valid_token()
-# A variável api_base_url será lida dos secrets dentro da função get_new_token
 api_base_url = st.secrets.get("DATAJURI_BASE_URL", "") if 'DATAJURI_BASE_URL' in st.secrets else ""
 
 if st.session_state.access_token:
@@ -344,14 +342,15 @@ def render_analise_page():
             deposito_recolhido = st.number_input("Valor de Depósito já Recolhido (R$):", min_value=0.0, step=100.0, format="%.2f")
         with col_calc2:
             percentual_custas = st.number_input("Percentual de Custas na Decisão (%):", min_value=0.0, max_value=100.0, value=2.0, step=0.5, format="%.1f")
-            pagamento_metade_geral = st.checkbox("Pagamento de Custas pela metade (50%)", help="Marque se aplicável para as custas (ex: entidades sem fins lucrativos)")
-
+        
         st.subheader("Depósito Recursal")
         isencao_deposito = st.selectbox("Isenção de Depósito Recursal:", options=ISENCAO_OPTIONS, key="isencao_deposito")
         outro_motivo_deposito = ""
         if isencao_deposito == "Outro motivo":
             outro_motivo_deposito = st.text_input("Especifique o outro motivo da isenção do depósito:", key="outro_motivo_deposito_input")
         
+        pagamento_metade_deposito = st.checkbox("Redução de 50% no Depósito (MEI, EPP, etc.)", help="Marque se aplicável para o depósito recursal.")
+
         deposito_a_recolher = 0.0
         is_entidade_beneficente = (isencao_deposito == "Entidade Beneficente")
         
@@ -360,7 +359,7 @@ def render_analise_page():
                 teto_recurso = TETOS_DEPOSITO_RECURSAL.get(recurso_selecionado, max(TETOS_DEPOSITO_RECURSAL.values()))
                 valor_base_deposito = min(teto_recurso, valor_condenacao) if valor_condenacao > 0 else teto_recurso
                 deposito_a_recolher = valor_base_deposito - deposito_recolhido
-                if is_entidade_beneficente:
+                if is_entidade_beneficente or pagamento_metade_deposito:
                     deposito_a_recolher /= 2
                 deposito_a_recolher = max(0, deposito_a_recolher)
                 st.metric("Valor do Depósito a Recolher:", f"R$ {deposito_a_recolher:,.2f}")
@@ -377,8 +376,6 @@ def render_analise_page():
         custas_a_recolher = 0.0
         if isencao_custas == "Não se aplica":
             custas_a_recolher = valor_condenacao * (percentual_custas / 100)
-            if pagamento_metade_geral:
-                custas_a_recolher /= 2
             st.metric("Valor das Custas a Recolher:", f"R$ {custas_a_recolher:,.2f}")
         else:
             motivo_custas_display = isencao_custas if isencao_custas != 'Outro motivo' else outro_motivo_custas
@@ -470,21 +467,14 @@ def render_analise_page():
                     update_tasks.append(task)
             
             if update_tasks:
-                # Cria o diretório se não existir
                 os.makedirs(UPDATE_FOLDER, exist_ok=True)
-                
-                # Cria um nome de arquivo único
                 pasta_sanitizada = re.sub(r'[\\/*?:"<>|]',"", st.session_state.processo_data.get('pasta', 'unknown'))
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 file_name = f"update_{pasta_sanitizada}_{timestamp}.json"
                 file_path = os.path.join(UPDATE_FOLDER, file_name)
-
-                # Salva o arquivo no servidor
                 with open(file_path, 'w', encoding='utf-8') as f:
                     json.dump(update_tasks, f, indent=2, ensure_ascii=False)
-                
                 st.success(f"Arquivo de atualização '{file_name}' salvo na pasta '{UPDATE_FOLDER}' no servidor para processamento pelo administrador.")
-
             else:
                  st.info("Nenhuma alteração nos pedidos detectada. Nenhum arquivo de atualização gerado.")
 
